@@ -44,6 +44,12 @@ static int get_health_pkt(void *dat) {
 
   health->sound_output_level_pkt = sound_output_level;
 
+  // madsheartbeat2pnw: publish the panda's own lateral authority so openpilot can notice a
+  // revoke it did not ask for. Mirrors the (controls_allowed || controls_allowed_lateral)
+  // expression the lateral tx gates use -- see board/health.h.
+  health->controls_allowed_lateral_pkt = (uint8_t)(controls_allowed || controls_allowed_lateral);
+  health->mads_disengage_reason_pkt = (uint8_t)(m_mads_state.current_disengage.active_reason);
+
   return sizeof(*health);
 }
 
@@ -298,6 +304,12 @@ int comms_control_handler(ControlPacket_t *req, uint8_t *resp) {
         heartbeat_lost = false;
         heartbeat_disabled = false;
         heartbeat_engaged = (req->param1 == 1U);
+        // madsheartbeat2pnw: param2 is "openpilot still intends LATERAL authority"
+        // (pandad sends madsState.enabled). It feeds mads_heartbeat_engaged_check() in the 1 Hz
+        // block of main.c, which REVOKES controls_allowed_lateral after 3 s of this reading 0.
+        // An openpilot that never sets it -- an old build, a pandad that died -- leaves this
+        // false and the panda takes lateral back. Missing means revoke.
+        heartbeat_engaged_mads = (req->param2 == 1U);
         break;
       }
     // **** 0xf6: set siren enabled

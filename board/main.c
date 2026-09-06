@@ -207,6 +207,11 @@ static void tick_handler(void) {
         heartbeat_engaged_mismatches = 0U;
       }
 
+      // madsheartbeat2pnw: the same watchdog for the PARALLEL lateral authority
+      // (opendbc/safety/pnw/mads.h). Revoke-only: it can clear controls_allowed_lateral, never
+      // set it, and it is a no-op on every car where MADS is off (the latch can never be up).
+      mads_heartbeat_engaged_check();
+
       if (!heartbeat_disabled) {
         // if the heartbeat has been gone for a while, go to SILENT safety mode and enter power save
         if (heartbeat_counter >= (started ? HEARTBEAT_IGNITION_CNT_ON : HEARTBEAT_IGNITION_CNT_OFF)) {
@@ -226,6 +231,11 @@ static void tick_handler(void) {
 
           // clear heartbeat engaged state
           heartbeat_engaged = false;
+          // madsheartbeat2pnw: and the lateral one with it. The set_safety_mode(SAFETY_SILENT)
+          // below already clears controls_allowed_lateral via mads_set_system_state(), but leaving
+          // a stale "openpilot wants lateral" true here would arm the watchdog wrongly if a mode
+          // change put the latch back up before the next 0xf3 arrived.
+          heartbeat_engaged_mads = false;
 
           if (current_safety_mode != SAFETY_SILENT) {
             set_safety_mode(SAFETY_SILENT, 0U);

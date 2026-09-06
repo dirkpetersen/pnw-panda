@@ -1,5 +1,27 @@
 #pragma once
 
+// NOTE: python/__init__.py::_parse_c_struct() parses this struct line-by-line and rejects ANY
+// line inside it that is not exactly `<type> <name>;` -- so no comments between the braces.
+//
+// madsheartbeat2pnw added `controls_allowed_lateral_pkt` at the END: is LATERAL tx currently
+// permitted by safety, i.e. exactly the (controls_allowed || controls_allowed_lateral) expression
+// every lateral tx gate in opendbc/safety/lateral.h evaluates. It lets openpilot detect a
+// panda-side revoke it did not ask for (selfdrived's lateral mismatch counter). On a stock or
+// non-MADS build controls_allowed_lateral is permanently false, so the field simply equals
+// controls_allowed -- correct, not misleading.
+//
+// ADDING A FIELD HERE CHANGES A VERSIONED WIRE STRUCT. HEALTH_PACKET_VERSION is a sha256 over
+// this whole file (python/constants.py::compute_version_hash, used by both python/__init__.py and
+// board/SConscript), so the version bumps itself and a mismatched pair fails LOUDLY rather than
+// mis-parsing: pypanda's @ensure_health_packet_version raises "health packet version mismatch ...
+// Reflash panda", and pandad's Panda::get_state() flags a short read. Append at the END only.
+//
+// `mads_disengage_reason_pkt` is the DisengageReason (opendbc/safety/pnw/mads_declarations.h) that
+// last took lateral authority down -- BRAKE / LAG / ACC_MAIN_OFF / OP_DISENGAGE /
+// HEARTBEAT_ENGAGED_MISMATCH / STEERING_DISENGAGE. Without it, "the panda revoked lateral" is
+// visible but its CAUSE is not, which is the difference between a diagnosable log and a shrug.
+// Added in the same version bump as controls_allowed_lateral_pkt so it does not cost a second
+// flash. Diagnostic only: nothing reads it for control.
 struct __attribute__((packed)) health_t {
   uint32_t uptime_pkt;
   uint32_t voltage_pkt;
@@ -27,6 +49,8 @@ struct __attribute__((packed)) health_t {
   uint16_t sbu2_voltage_mV;
   uint8_t som_reset_triggered;
   uint16_t sound_output_level_pkt;
+  uint8_t controls_allowed_lateral_pkt;
+  uint8_t mads_disengage_reason_pkt;
 };
 
 typedef struct __attribute__((packed)) {
